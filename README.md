@@ -45,14 +45,3 @@ Click the extension icon to see your recent downloads and open the settings.
 - Only GIFs are handled. Regular X videos are served over HLS and are out of scope.
 - A GIF is limited to 256 colours per frame, so the result is coarser and heavier than the source
   MP4. Lower the maximum width or frame rate if file size matters.
-
-## Development
-
-Rebuild the Firefox package:
-
-```bash
-python tools/build-firefox.py
-```
-
-Run the test suites by serving the parent folder and opening `tests/harness.html` (encoder) and
-`tests/content-harness.html` (content script) in a browser.
