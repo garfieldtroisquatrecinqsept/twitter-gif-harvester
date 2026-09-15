@@ -1,11 +1,12 @@
 # Twitter GIF Harvest
 
-Downloads GIFs from X / Twitter as real animated `.gif` files — X serves them as silent MP4s, and this
-extension converts them back entirely inside your browser, with no external service involved.
+Downloads GIFs from X / Twitter as real animated `.gif` files. X serves them as silent MP4s,
+and this extension converts them back entirely inside your browser, with no external service
+involved.
 
 Works on Firefox and on Chrome / Edge / Brave.
 
-## Install — Firefox
+## Install on Firefox
 
 1. Download [`release/twitter-gif-harvest-1.0.0-signed.xpi`](release/twitter-gif-harvest-1.0.0-signed.xpi)
 2. Open `about:addons`
@@ -13,7 +14,7 @@ Works on Firefox and on Chrome / Edge / Brave.
 
 This build is signed by Mozilla, so it installs permanently. Requires Firefox 140 or later.
 
-## Install — Chrome / Edge / Brave
+## Install on Chrome / Edge / Brave
 
 1. Download or clone this repository
 2. Open `chrome://extensions` and turn on **Developer mode**
@@ -32,7 +33,7 @@ Click the extension icon to see your recent downloads and open the settings.
 | --- | --- | --- |
 | Max frames per second | 25 | Caps smoothness without halving it: a 30 fps source keeps 25 frames, each with its exact duration |
 | Max width / height | 640 px | Resizes while keeping the aspect ratio |
-| Floyd–Steinberg dithering | on | Smoother gradients, slightly larger file |
+| Floyd-Steinberg dithering | on | Smoother gradients, slightly larger file |
 | Frame-to-frame tolerance | 8 | Higher means more pixels count as unchanged, so a smaller file |
 | Infinite loop | on | Turn off to play the GIF once |
 | Subfolder | `TwitterGifHarvest` | Subfolder inside your downloads directory; leave empty for the root |
