@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>GIF Harvest - test du script de contenu</title>
+    <link rel="stylesheet" href="../src/content/content.css" />
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; margin: 20px; background: #111; color: #eee; }
+      pre { background: #1c1c1c; padding: 14px; border-radius: 8px; white-space: pre-wrap; }
+      article { background: #16202a; border: 1px solid #2f3b47; border-radius: 12px; padding: 12px; margin: 12px 0; max-width: 520px; }
+      [data-testid="videoPlayer"] { background: #000; }
+      video { width: 100%; max-width: 480px; display: block; }
+    </style>
+  </head>
+  <body>
+    <h1>Test du script de contenu</h1>
+    <pre id="results">en cours...</pre>
+
+    <div id="scene">
+      <article data-testid="tweet">
+        <a href="/unutilisateur/status/1874000000000000001">lien du tweet</a>
+        <div data-testid="videoPlayer">
+          <video muted playsinline src="https://video.twimg.com/tweet_video/AbC123dEf.mp4"></video>
+        </div>
+      </article>
+
+      <article data-testid="tweet">
+        <a href="/autrepersonne/status/1874000000000000002">lien du tweet</a>
+        <div data-testid="videoPlayer">
+          <video muted playsinline poster="https://pbs.twimg.com/tweet_video_thumb/XyZ789ghi.jpg"></video>
+        </div>
+      </article>
+
+      <article data-testid="tweet">
+        <a href="/troisieme/status/1874000000000000003">lien du tweet</a>
+        <div data-testid="videoPlayer">
+          <video muted playsinline poster="https://pbs.twimg.com/ext_tw_video_thumb/1874/pu/img/abc.jpg"></video>
+        </div>
+      </article>
+    </div>
+
+    <script>
+      window.__captured = [];
+      window.chrome = {
+        runtime: {
+          sendMessage: async (message) => {
+            window.__captured.push(message);
+            return { ok: true, filename: 'test.gif', size: 1234 };
+          },
+          onMessage: { addListener: () => {} }
+        }
+      };
+    </script>
+    <script src="../src/content/content.js"></script>
+    <script>
+      (async () => {
+        const results = {};
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        await sleep(600);
+
+        const players = document.querySelectorAll('[data-testid="videoPlayer"]');
+        const buttons = document.querySelectorAll('.tgh-button');
+        const first = players[0].querySelector('.tgh-button');
+        const second = players[1].querySelector('.tgh-button');
+        const third = players[2].querySelector('.tgh-button');
+
+        results.detection = {
+          boutonsInjectes: buttons.length,
+          srcDirect: Boolean(first),
+          deduitDuPoster: Boolean(second),
+          videoNormaleIgnoree: !third,
+          verdict: buttons.length === 2 && first && second && !third ? 'OK' : 'ECHEC'
+        };
+
+        const svg = first ? first.querySelector('svg') : null;
+        const label = first ? first.querySelector('.tgh-button-label') : null;
+        results.rendu = {
+          icone: Boolean(svg),
+          cheminsSvg: svg ? svg.querySelectorAll('path').length : 0,
+          libelle: label ? label.textContent : null,
+          infobulle: first ? first.title : null,
+          position: first ? getComputedStyle(first).position : null,
+          hoteRelatif: first ? getComputedStyle(first.parentElement).position : null,
+          verdict:
+            svg && svg.querySelectorAll('path').length === 2 &&
+            label && label.textContent === 'GIF' &&
+            first.title.length > 0 &&
+            getComputedStyle(first).position === 'absolute' &&
+            getComputedStyle(first.parentElement).position === 'relative'
+              ? 'OK'
+              : 'ECHEC'
+        };
+
+        let navigated = false;
+        document.querySelectorAll('#scene a').forEach((a) => {
+          a.addEventListener('click', () => { navigated = true; });
+        });
+
+        first.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        await sleep(150);
+        second.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        await sleep(150);
+
+        const captured = window.__captured;
+        results.clic = {
+          messagesEnvoyes: captured.length,
+          url1: captured[0] ? captured[0].url : null,
+          url2: captured[1] ? captured[1].url : null,
+          meta1: captured[0] ? captured[0].meta : null,
+          propagationBloquee: !navigated,
+          verdict:
+            captured.length === 2 &&
+            captured[0].url === 'https://video.twimg.com/tweet_video/AbC123dEf.mp4' &&
+            captured[1].url === 'https://video.twimg.com/tweet_video/XyZ789ghi.mp4' &&
+            captured[0].meta.screenName === 'unutilisateur' &&
+            captured[0].meta.tweetId === '1874000000000000001' &&
+            captured[0].meta.index === 1 &&
+            !navigated
+              ? 'OK'
+              : 'ECHEC'
+        };
+
+        const reinjected = document.querySelectorAll('.tgh-button').length;
+        document.getElementById('scene').appendChild(document.createElement('div'));
+        await sleep(500);
+        results.antiDoublon = {
+          avant: reinjected,
+          apresMutation: document.querySelectorAll('.tgh-button').length,
+          verdict: document.querySelectorAll('.tgh-button').length === reinjected ? 'OK' : 'ECHEC'
+        };
+
+        results.resume = Object.keys(results)
+          .filter((k) => results[k] && results[k].verdict)
+          .map((k) => k + '=' + results[k].verdict)
+          .join(' ');
+        document.getElementById('results').textContent = JSON.stringify(results, null, 2);
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Twitter GIF Harvest</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --text: #0f1419;
+        --muted: #536471;
+        --line: #eff3f4;
+        --accent: #1d9bf0;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #15202b;
+          --text: #e7e9ea;
+          --muted: #8b98a5;
+          --line: #253341;
+        }
+      }
+      body {
+        width: 320px;
+        margin: 0;
+        padding: 14px 16px 16px;
+        background: var(--bg);
+        color: var(--text);
+        font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+      h1 {
+        font-size: 15px;
+        margin: 0;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 12.5px;
+      }
+      .hint {
+        color: var(--muted);
+        margin: 0 0 12px;
+        font-size: 12.5px;
+      }
+      h2 {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 6px;
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        max-height: 250px;
+        overflow-y: auto;
+      }
+      li {
+        padding: 7px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      li:last-child {
+        border-bottom: 0;
+      }
+      .name {
+        font-weight: 600;
+        word-break: break-all;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .empty {
+        color: var(--muted);
+        padding: 10px 0;
+      }
+      #grant {
+        display: none;
+        margin: 0 0 12px;
+        padding: 10px 12px;
+        border-radius: 9px;
+        background: rgba(255, 173, 31, 0.14);
+        border: 1px solid rgba(255, 173, 31, 0.45);
+      }
+      #grant p {
+        margin: 0 0 8px;
+        font-size: 12.5px;
+      }
+      #grant button {
+        background: var(--accent);
+        color: #fff;
+        border: 0;
+        border-radius: 999px;
+        padding: 7px 14px;
+        font: 600 12.5px/1 inherit;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Twitter GIF Harvest</h1>
+      <a href="#" id="options">Reglages</a>
+    </header>
+    <div id="grant">
+      <p>L'extension n'a pas encore l'autorisation d'acceder a X et au CDN video.</p>
+      <button id="grantButton" type="button">Autoriser</button>
+    </div>
+    <p class="hint">Sur X, survole un GIF et clique le bouton <strong>GIF</strong> en bas a gauche du lecteur.</p>
+    <h2>Derniers telechargements</h2>
+    <ul id="history"></ul>
+    <script src="popup.js"></script>
+  </body>
+</html>

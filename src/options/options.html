@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Twitter GIF Harvest - Reglages</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f7f9fa;
+        --card: #ffffff;
+        --text: #0f1419;
+        --muted: #536471;
+        --line: #cfd9de;
+        --accent: #1d9bf0;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #15202b;
+          --card: #1b2836;
+          --text: #e7e9ea;
+          --muted: #8b98a5;
+          --line: #38444d;
+        }
+      }
+      body {
+        margin: 0;
+        padding: 32px 20px 60px;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      main {
+        max-width: 640px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0 0 4px;
+      }
+      p.lead {
+        color: var(--muted);
+        margin: 0 0 26px;
+      }
+      section {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 18px 20px;
+        margin-bottom: 16px;
+      }
+      h2 {
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 14px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .row:last-child {
+        border-bottom: 0;
+      }
+      .row label {
+        flex: 1;
+      }
+      .row small {
+        display: block;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      input[type="number"],
+      input[type="text"],
+      select {
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 7px 10px;
+        font: inherit;
+        min-width: 90px;
+      }
+      input[type="text"] {
+        min-width: 240px;
+      }
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-top: 22px;
+      }
+      button {
+        background: var(--accent);
+        color: #fff;
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 22px;
+        font: 600 14px/1 inherit;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--muted);
+        border: 1px solid var(--line);
+      }
+      #status {
+        color: #00a06a;
+        font-weight: 600;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+      #status.visible {
+        opacity: 1;
+      }
+      code {
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 1px 5px;
+        font-size: 12.5px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Twitter GIF Harvest</h1>
+      <p class="lead">Reglages de conversion et de nommage des fichiers.</p>
+
+      <section>
+        <h2>Qualite du GIF</h2>
+        <div class="row">
+          <label for="maxFps">Images par seconde max<small>Plus haut = plus fluide mais fichier plus lourd.</small></label>
+          <input type="number" id="maxFps" min="5" max="50" step="1" />
+        </div>
+        <div class="row">
+          <label for="maxWidth">Largeur max (px)<small>Le GIF garde ses proportions.</small></label>
+          <input type="number" id="maxWidth" min="120" max="1920" step="10" />
+        </div>
+        <div class="row">
+          <label for="maxHeight">Hauteur max (px)</label>
+          <input type="number" id="maxHeight" min="120" max="1920" step="10" />
+        </div>
+        <div class="row">
+          <label for="dither">Tramage Floyd-Steinberg<small>Meilleurs degrades, fichier un peu plus lourd.</small></label>
+          <input type="checkbox" id="dither" />
+        </div>
+        <div class="row">
+          <label for="tolerance">Tolerance inter-images<small>0 = exact. Plus haut = fichier plus leger.</small></label>
+          <input type="number" id="tolerance" min="0" max="40" step="1" />
+        </div>
+        <div class="row">
+          <label for="loop">Lecture en boucle infinie</label>
+          <input type="checkbox" id="loop" />
+        </div>
+      </section>
+
+      <section>
+        <h2>Enregistrement</h2>
+        <div class="row">
+          <label for="subfolder">Sous-dossier de telechargement<small>Vide = racine du dossier Telechargements.</small></label>
+          <input type="text" id="subfolder" />
+        </div>
+        <div class="row">
+          <label for="pattern">Modele de nom<small>Variables : <code>{screen_name}</code> <code>{tweet_id}</code> <code>{index}</code> <code>{media_id}</code> <code>{date}</code> <code>{time}</code></small></label>
+          <input type="text" id="pattern" />
+        </div>
+        <div class="row">
+          <label for="askWhereToSave">Demander ou enregistrer</label>
+          <input type="checkbox" id="askWhereToSave" />
+        </div>
+      </section>
+
+      <div class="actions">
+        <button id="save" type="button">Enregistrer</button>
+        <button id="reset" type="button" class="secondary">Valeurs par defaut</button>
+        <span id="status">Enregistre</span>
+      </div>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

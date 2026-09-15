@@ -1,0 +1,11 @@
+# Paquet reconstructible : « python tools/build-firefox.py »
+dist/
+
+# Sorties de web-ext
+web-ext-artifacts/
+.web-ext-config.*
+
+node_modules/
+*.log
+Thumbs.db
+.DS_Store

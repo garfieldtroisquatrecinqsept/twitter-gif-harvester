@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>GIF Harvest - banc de test</title>
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; margin: 20px; background: #111; color: #eee; }
+      pre { background: #1c1c1c; padding: 14px; border-radius: 8px; white-space: pre-wrap; }
+      img, canvas { background: #222; border: 1px solid #444; margin-right: 10px; vertical-align: top; }
+      h2 { font-size: 15px; margin: 22px 0 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Banc de test GIF Harvest</h1>
+    <pre id="results">en cours...</pre>
+    <h2>Sortie du pipeline</h2>
+    <div><img id="preview" alt="gif produit" /></div>
+
+    <script type="module">
+      import { GifWriter } from '../src/lib/gif.js';
+      import { buildPalette, mapPixels } from '../src/lib/quantize.js';
+      import { parseMp4Timing } from '../src/lib/mp4.js';
+      import { convertToGif, planFromDurations } from '../src/lib/convert.js';
+
+      const results = {};
+      const out = document.getElementById('results');
+      const log = () => { out.textContent = JSON.stringify(results, null, 2); };
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      async function decodeGif(bytes) {
+        const decoder = new ImageDecoder({ data: bytes, type: 'image/gif' });
+        await decoder.tracks.ready;
+        await decoder.completed;
+        return { decoder, frameCount: decoder.tracks.selectedTrack.frameCount };
+      }
+
+      async function framePixels(decoder, index, width, height) {
+        const { image } = await decoder.decode({ frameIndex: index });
+        const canvas = new OffscreenCanvas(width, height);
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(image, 0, 0);
+        const data = ctx.getImageData(0, 0, width, height).data;
+        image.close();
+        return data;
+      }
+
+      async function testLzwRoundtrip() {
+        const width = 67;
+        const height = 43;
+        const colorCount = 233;
+        const palette = new Uint8Array(colorCount * 3);
+        for (let i = 0; i < colorCount; i++) {
+          palette[i * 3] = (i * 7 + 11) & 255;
+          palette[i * 3 + 1] = (i * 29 + 3) & 255;
+          palette[i * 3 + 2] = (i * 53 + 97) & 255;
+        }
+
+        const frames = [];
+        for (let f = 0; f < 2; f++) {
+          const indices = new Uint8Array(width * height);
+          let seed = 12345 + f * 999;
+          for (let i = 0; i < indices.length; i++) {
+            seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+            indices[i] = f === 0 ? (seed >> 8) % colorCount : i % colorCount;
+          }
+          frames.push(indices);
+        }
+
+        const writer = new GifWriter(width, height, 0);
+        for (const indices of frames) {
+          writer.addFrame({
+            indices, palette, colorCount,
+            x: 0, y: 0, width, height,
+            delayCs: 5, transparentIndex: -1
+          });
+        }
+        const bytes = writer.finish();
+
+        const { decoder, frameCount } = await decodeGif(bytes);
+        let maxError = 0;
+        let mismatches = 0;
+        for (let f = 0; f < Math.min(frameCount, frames.length); f++) {
+          const pixels = await framePixels(decoder, f, width, height);
+          for (let i = 0; i < width * height; i++) {
+            const idx = frames[f][i];
+            for (let c = 0; c < 3; c++) {
+              const diff = Math.abs(pixels[i * 4 + c] - palette[idx * 3 + c]);
+              if (diff > maxError) maxError = diff;
+              if (diff > 2) mismatches++;
+            }
+          }
+        }
+
+        results.testA_lzw = {
+          poidsOctets: bytes.length,
+          imagesAttendues: frames.length,
+          imagesDecodees: frameCount,
+          maxErreurCanal: maxError,
+          pixelsFaux: mismatches,
+          verdict: frameCount === frames.length && mismatches === 0 ? 'OK' : 'ECHEC'
+        };
+        log();
+      }
+
+      async function testTransparencyDiff() {
+        const width = 40;
+        const height = 30;
+        const palette = new Uint8Array([255, 0, 0, 0, 0, 255, 0, 0, 0]);
+        const full = new Uint8Array(width * height).fill(0);
+
+        const writer = new GifWriter(width, height, 0);
+        writer.addFrame({
+          indices: full, palette, colorCount: 3,
+          x: 0, y: 0, width, height,
+          delayCs: 10, transparentIndex: -1
+        });
+
+        const patchW = 10;
+        const patchH = 8;
+        const patch = new Uint8Array(patchW * patchH);
+        for (let i = 0; i < patch.length; i++) patch[i] = i % 2 === 0 ? 1 : 2;
+        writer.addFrame({
+          indices: patch, palette, colorCount: 3,
+          x: 5, y: 4, width: patchW, height: patchH,
+          delayCs: 10, transparentIndex: 2
+        });
+
+        const bytes = writer.finish();
+        const { decoder, frameCount } = await decodeGif(bytes);
+        const second = await framePixels(decoder, 1, width, height);
+
+        const at = (x, y) => {
+          const o = (y * width + x) * 4;
+          return [second[o], second[o + 1], second[o + 2]];
+        };
+        const outside = at(30, 25);
+        const patchBlue = at(5, 4);
+        const patchKept = at(6, 4);
+
+        results.testB_transparence = {
+          imagesDecodees: frameCount,
+          horsZone: outside,
+          pixelModifie: patchBlue,
+          pixelTransparent: patchKept,
+          verdict:
+            frameCount === 2 &&
+            outside[0] > 250 && outside[2] < 5 &&
+            patchBlue[2] > 250 &&
+            patchKept[0] > 250 && patchKept[2] < 5
+              ? 'OK'
+              : 'ECHEC'
+        };
+        log();
+      }
+
+      async function testQuantizer() {
+        const width = 128;
+        const height = 96;
+        const data = new Uint8ClampedArray(width * height * 4);
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const o = (y * width + x) * 4;
+            data[o] = Math.round((x / width) * 255);
+            data[o + 1] = Math.round((y / height) * 255);
+            data[o + 2] = Math.round(((x + y) / (width + height)) * 255);
+            data[o + 3] = 255;
+          }
+        }
+        const box = { x: 0, y: 0, width, height };
+        const { palette, size } = buildPalette(data, width, box, null, 256);
+        const indices = mapPixels(data, width, box, null, palette, size, 0, false);
+
+        let sum = 0;
+        for (let i = 0; i < width * height; i++) {
+          const p = indices[i] * 3;
+          const o = i * 4;
+          sum += Math.abs(data[o] - palette[p]) +
+            Math.abs(data[o + 1] - palette[p + 1]) +
+            Math.abs(data[o + 2] - palette[p + 2]);
+        }
+        const mean = sum / (width * height * 3);
+
+        results.testC_quantizer = {
+          couleursPalette: size,
+          erreurMoyenneParCanal: +mean.toFixed(2),
+          verdict: size > 200 && mean < 6 ? 'OK' : 'ECHEC'
+        };
+        log();
+      }
+
+      function box(type, payload) {
+        const size = 8 + payload.length;
+        const buffer = new Uint8Array(size);
+        const view = new DataView(buffer.buffer);
+        view.setUint32(0, size);
+        for (let i = 0; i < 4; i++) buffer[4 + i] = type.charCodeAt(i);
+        buffer.set(payload, 8);
+        return buffer;
+      }
+
+      function concat(parts) {
+        let total = 0;
+        for (const p of parts) total += p.length;
+        const outBuf = new Uint8Array(total);
+        let offset = 0;
+        for (const p of parts) { outBuf.set(p, offset); offset += p.length; }
+        return outBuf;
+      }
+
+      function u32(values) {
+        const buffer = new Uint8Array(values.length * 4);
+        const view = new DataView(buffer.buffer);
+        values.forEach((v, i) => view.setUint32(i * 4, v));
+        return buffer;
+      }
+
+      function makeTrack(handler, timescale, sttsEntries) {
+        const hdlr = box('hdlr', concat([
+          u32([0, 0]),
+          new Uint8Array([handler.charCodeAt(0), handler.charCodeAt(1), handler.charCodeAt(2), handler.charCodeAt(3)]),
+          new Uint8Array(13)
+        ]));
+        const mdhd = box('mdhd', concat([u32([0, 0, 0, timescale, 0]), new Uint8Array(4)]));
+        const stts = box('stts', concat([u32([0, sttsEntries.length]), u32(sttsEntries.flat())]));
+        const stbl = box('stbl', stts);
+        const minf = box('minf', stbl);
+        const mdia = box('mdia', concat([mdhd, hdlr, minf]));
+        return box('trak', mdia);
+      }
+
+      async function testMp4Parser() {
+        const timescale = 15000;
+        const videoTrack = makeTrack('vide', timescale, [[3, 500], [2, 750]]);
+        const audioTrack = makeTrack('soun', 44100, [[10, 1024]]);
+        const moov = box('moov', concat([audioTrack, videoTrack]));
+        const ftyp = box('ftyp', new Uint8Array(16));
+        const file = concat([ftyp, moov]);
+
+        const timing = parseMp4Timing(file.buffer);
+        const expectedDuration = (3 * 500 + 2 * 750) / timescale;
+
+        results.testD_mp4 = {
+          detecte: Boolean(timing),
+          timescale: timing ? timing.timescale : null,
+          nbImages: timing ? timing.frameCount : null,
+          duree: timing ? +timing.duration.toFixed(4) : null,
+          dureeAttendue: +expectedDuration.toFixed(4),
+          premiereDuree: timing ? +timing.durations[0].toFixed(5) : null,
+          derniereDuree: timing ? +timing.durations[4].toFixed(5) : null,
+          verdict:
+            timing &&
+            timing.timescale === timescale &&
+            timing.frameCount === 5 &&
+            Math.abs(timing.duration - expectedDuration) < 1e-6 &&
+            Math.abs(timing.durations[0] - 500 / timescale) < 1e-9 &&
+            Math.abs(timing.durations[4] - 750 / timescale) < 1e-9
+              ? 'OK'
+              : 'ECHEC'
+        };
+        log();
+      }
+
+      async function testFrameRateCap() {
+        const uniform = (count, fps) => new Array(count).fill(1 / fps);
+
+        const scenario = (label, sourceFps, seconds, maxFps, attendu) => {
+          const durations = uniform(Math.round(sourceFps * seconds), sourceFps);
+          const plan = planFromDurations(durations, maxFps);
+          const total = plan.reduce((sum, entry) => sum + entry.seconds, 0);
+          let croissant = true;
+          for (let i = 1; i < plan.length; i++) {
+            if (plan[i].time <= plan[i - 1].time) croissant = false;
+          }
+          return {
+            label,
+            imagesGardees: plan.length,
+            attendu,
+            fpsSortie: +(plan.length / seconds).toFixed(1),
+            dureeConservee: +total.toFixed(4),
+            dureeSource: +seconds.toFixed(4),
+            tempsCroissants: croissant,
+            ok:
+              Math.abs(plan.length - attendu) <= 1 &&
+              Math.abs(total - seconds) < 1e-6 &&
+              croissant
+          };
+        };
+
+        const cas = [
+          scenario('30 im/s plafonne a 25', 30, 2, 25, 50),
+          scenario('25 im/s plafonne a 25', 25, 2, 25, 50),
+          scenario('60 im/s plafonne a 25', 60, 2, 25, 50),
+          scenario('10 im/s plafonne a 25', 10, 2, 25, 20),
+          scenario('30 im/s plafonne a 15', 30, 2, 15, 30)
+        ];
+
+        results.testF_plafondFps = {
+          cas,
+          verdict: cas.every((c) => c.ok) ? 'OK' : 'ECHEC'
+        };
+        log();
+      }
+
+      async function makeTestVideo() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 240;
+        canvas.height = 160;
+        const ctx = canvas.getContext('2d');
+        const stream = canvas.captureStream(0);
+        const track = stream.getVideoTracks()[0];
+        const chunks = [];
+        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+        const stopped = new Promise((resolve) => { recorder.onstop = resolve; });
+
+        recorder.start();
+        const frameCount = 20;
+        for (let i = 0; i < frameCount; i++) {
+          const t = i / 10;
+          ctx.fillStyle = '#123f6d';
+          ctx.fillRect(0, 0, 240, 160);
+          ctx.fillStyle = '#ffd166';
+          ctx.font = 'bold 22px sans-serif';
+          ctx.fillText('GIF TEST', 14, 34);
+          ctx.beginPath();
+          ctx.arc(40 + ((t * 120) % 160), 105, 26, 0, Math.PI * 2);
+          ctx.fillStyle = '#ef476f';
+          ctx.fill();
+          track.requestFrame();
+          await sleep(60);
+        }
+        recorder.stop();
+        await stopped;
+        return new Blob(chunks, { type: 'video/webm' });
+      }
+
+      async function testPipeline() {
+        const blob = await makeTestVideo();
+        const url = URL.createObjectURL(blob);
+        const started = performance.now();
+        const result = await convertToGif(url, {
+          maxFps: 20, maxWidth: 240, maxHeight: 240, dither: true, tolerance: 8, loop: true
+        }, () => {});
+        const elapsed = Math.round(performance.now() - started);
+
+        document.getElementById('preview').src =
+          URL.createObjectURL(new Blob([result.bytes], { type: 'image/gif' }));
+
+        const { decoder, frameCount } = await decodeGif(result.bytes);
+        const pixels = await framePixels(decoder, 0, result.width, result.height);
+        const corner = [pixels[0], pixels[1], pixels[2]];
+
+        results.testE_pipeline = {
+          dureeSource: +result.duration.toFixed(2),
+          timingConteneur: result.timedFromContainer,
+          taille: result.width + 'x' + result.height,
+          imagesEcrites: result.frames,
+          imagesDecodees: frameCount,
+          poidsKo: Math.round(result.bytes.length / 1024),
+          fondPremiereImage: corner,
+          msConversion: elapsed,
+          verdict:
+            frameCount >= 5 &&
+            result.width === 240 &&
+            Math.abs(corner[0] - 0x12) < 16 &&
+            Math.abs(corner[1] - 0x3f) < 16 &&
+            Math.abs(corner[2] - 0x6d) < 16
+              ? 'OK'
+              : 'ECHEC'
+        };
+        log();
+      }
+
+      try {
+        await testLzwRoundtrip();
+        await testTransparencyDiff();
+        await testQuantizer();
+        await testMp4Parser();
+        await testFrameRateCap();
+        await testPipeline();
+      } catch (error) {
+        results.erreurFatale = String(error && error.stack ? error.stack : error);
+      }
+      results.resume = Object.keys(results)
+        .filter((k) => results[k] && results[k].verdict)
+        .map((k) => k.split('_')[0] + '=' + results[k].verdict)
+        .join(' ');
+      log();
+    </script>
+  </body>
+</html>
